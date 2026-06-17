@@ -1,0 +1,6 @@
+{
+  "name": "Guided English Learning",
+  "description": "A guided English learning platform for children aged 9-14, featuring separate student and teacher spaces.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
