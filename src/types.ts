@@ -36,6 +36,7 @@ export interface DictionaryEntry {
   word?: string;
   translation?: string;
   definition?: string;
+  example?: string;
 }
 
 export type Role = "student" | "teacher" | null;
@@ -71,7 +72,26 @@ export interface FlashcardConfig extends BaseActivityConfig {
   word: string;
   translation_ar: string;
   example: string;
-  showPhonetics?: boolean;
+  
+  // Teacher configuration parameters
+  flashcardLearnMode?: string;
+  flashcardTolerance?: string;
+  flashcardUseHints?: boolean;
+  flashcardHintLength?: boolean;
+  flashcardHintFirstLetter?: boolean;
+  flashcardHintWholeWord?: boolean;
+  flashcardHintPenalty?: string;
+  flashcardShowImage?: boolean;
+  flashcardShowWord?: boolean;
+  flashcardShowPhonetics?: boolean;
+  flashcardShowAudio?: boolean;
+  flashcardFeedback?: string;
+  flashcardUseTimer?: boolean;
+  flashcardTimerSeconds?: number;
+  flashcardReward?: string;
+  flashcardPassingScore?: number;
+  flashcardAttemptsMode?: string;
+  flashcardMaxAttempts?: number;
 }
 
 export interface ClozeConfig extends BaseActivityConfig {
@@ -86,6 +106,7 @@ export interface ReadingVocabulary {
   word: string;
   translation: string;
   definition?: string;
+  example?: string;
 }
 
 export interface ReadingCloze {

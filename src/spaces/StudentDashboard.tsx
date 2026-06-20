@@ -65,7 +65,7 @@ export function StudentDashboard({ studentName, stats, courseData, studentHistor
                   Waiting for New Lessons
                 </h2>
                 <p className="text-[15px] text-text-secondary">
-                  Your teacher hasn't published any lessons yet!
+                  Your teacher hasn't assigned any lessons to you yet!
                 </p>
               </div>
             ) : (
