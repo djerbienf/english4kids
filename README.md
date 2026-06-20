@@ -16,7 +16,28 @@ Notre application est un Learning Management System (LMS) axé sur l'apprentissa
 *   **React Router DOM** pour la navigation entre les espaces Professeur et Élève.
 *   **LocalStorage** pour la persistance locale de la base de données simulée.
 
-## 2. Architecture et Cartographie du Projet (Project Map)
+## 2. Piliers Fondamentaux : Design, Langue et Pédagogie
+
+### 🎨 Charte de Design & "Web First"
+* **"Web First" Responsif :** L'interface a été originellement pensée pour de grands écrans (tablettes, ordinateurs de bureau pour les élèves en classe / à la maison) permettant de profiter de vastes espaces blancs (negative space), de layouts côte-à-côte (bento grids) pour le tableau de bord du professeur. Bien qu'elle soit pensée "Web First" visuellement, elle est bâtie en `mobile-first` côté code (classes Bootstrap-like de Tailwind) lui permettant de se replier élégamment sur smartphone.
+* **Minimalisme et Clarté :** L'accent est mis sur une typographie nette (`Inter` ou polices sans-serif modernes), des ombres douces et des bordures légères (`primary-light`) au lieu de lourds dégradés, minimisant ainsi la charge visuelle de l'apprenant.
+* **Micro-interactions (Motion) :** Toute l'interface est accompagnée de douces transitions Framer Motion : feedback visuel immédiat en cas de succès `(vert)` ou d'erreur `(rouge)`, tremblements doux (shake) sur une mauvaise réponse, etc.
+
+### 🌍 Règle Linguistique (UI en Anglais)
+* **Application 100% Anglophone :** L'interface de l'application elle-même (menus, boutons `Continue`, `Confirm`, tableaux de bord `Students`, `Tracking`, feedbacks `Correct!`, `Almost perfect`) est **strictement rédigée en anglais**.
+* **L'Arabe comme "Data" :** La langue d'apprentissage cible (l'arabe) n'intervient **que dans le cadre pédagogique**, c'est-à-dire en tant que données issues de la base : traductions du vocabulaire, flashcards, lexique cible et phrases-exemples (ex: `أفراد العائلة`).
+
+### 🧠 Principes Pédagogiques
+* **Micro-Learning (Bite-sized) :** Chaque leçon est découpée en toutes petites activités linéaires et hautement focalisées (1. Vidéo → 2. Découverte Vocabulaire → 3. Quiz QCM → 4. Lecture) pour maintenir une attention maximale sans surcharge cognitive intellectuelle.
+* **Apprentissage Échelonné (Phased Learning) :** Le composant `Flashcard.tsx` n'est pas un banal QCM. Il agit en 3 phases par mot :
+  1. *Découverte* : Mémorisation libre du mot et de son image/émoji sans contrainte.
+  2. *Reconnaissance* : Test QCM de capacité passive.
+  3. *Production Active* : Saisie textuelle forcée au clavier nécessitant une trace mnésique plus forte.
+* **Tolérance à l'Erreur Mathématique (Levenshtein) :** L'application intègre un test algorithmique de distance de Levenshtein. Ainsi, on ne punit pas l'élève pour une banale "faute de frappe" d'une consonne. Si la réponse textuelle est *presque exacte*, le système aide l'élève et accorde la victoire, pour ne pas briser la fluidité de l'apprentissage.
+* **Lecture Assistée In-Situ :** Dans le module `<ReadingActivity />`, le texte interactif identifie lui-même les termes du dictionnaire. L'élève peut cliquer sur n'importe quel mot inconnu pour faire apparaître un tooltip avec sa définition et traduction, évitant l'arrêt total de la tâche de lecture pour aller chercher un dictionnaire externe.
+* **Gamification douce :** Un système positif récompensant l'achèvement des objectifs par un gain d'XP (Experience Points).
+
+## 3. Architecture et Cartographie du Projet (Project Map)
 
 Voici l'arborescence complète et refactorisée de l'application :
 
@@ -84,7 +105,7 @@ Voici l'arborescence complète et refactorisée de l'application :
 └── vite.config.ts
 ```
 
-## 3. Dictionnaire des Fichiers (Explications détaillées)
+## 4. Dictionnaire des Fichiers (Explications détaillées)
 
 L'architecture est décomposée pour respecter le principe de responsabilité unique (SOLID), et pour éviter l'engorgement d'un seul fichier (éviter de dépasser la limite de tokens ou de rendre le projet illisible).
 
@@ -143,7 +164,7 @@ L'architecture est décomposée pour respecter le principe de responsabilité un
 *   **`TextScanner.tsx` :** Extrait heuristiquement les mots d'un block de texte et suggère de les intégrer au dictionnaire.
 *   **`LessonEditor.tsx` & `ReadingActivityEditor.tsx` :** Interfaces avancées pour la configuration pas-à-pas des paramètres d'une leçon (Video, Flashcards, Quiz).
 
-## 4. Guide d'Installation et de Lancement
+## 5. Guide d'Installation et de Lancement
 
 Afin d'exécuter ce projet fraîchement téléchargé ou copié, effectuez obligatoirement ces étapes depuis la racine (`/`) du projet :
 
