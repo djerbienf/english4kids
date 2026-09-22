@@ -1,0 +1,121 @@
+{
+  "entities": {
+    "DictionaryEntry": {
+      "title": "DictionaryEntry",
+      "description": "Represents a single word entry in the dictionary",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "lemma": { "type": "string" },
+        "senses": { "type": "array" }
+      },
+      "required": ["id", "lemma"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Represents a course unit containing multiple lessons",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "lessons": { "type": "array" },
+        "order": { "type": "integer" }
+      },
+      "required": ["id", "title"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Represents a student enrolled in the platform",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "avatar": { "type": "string" }
+      },
+      "required": ["id", "username", "password"]
+    },
+    "StudentCursus": {
+      "title": "StudentCursus",
+      "description": "List of lessons and activities assigned to a student",
+      "type": "object",
+      "properties": {
+        "cursus": { "type": "array" }
+      },
+      "required": ["cursus"]
+    },
+    "StudentStats": {
+      "title": "StudentStats",
+      "description": "Statistics and gamification parameters for a student",
+      "type": "object",
+      "properties": {
+        "xp": { "type": "integer" },
+        "streak": { "type": "integer" },
+        "dailyGoalProgress": { "type": "integer" }
+      }
+    },
+    "HistoryEvent": {
+      "title": "HistoryEvent",
+      "description": "History action log for student interactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "type": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "unitId": { "type": "string" },
+        "lessonId": { "type": "string" }
+      },
+      "required": ["id", "studentId", "type", "timestamp"]
+    },
+    "SrsDeck": {
+      "title": "SrsDeck",
+      "description": "Spaced repetition deck cards for a student",
+      "type": "object",
+      "properties": {
+        "deck": { "type": "array" }
+      },
+      "required": ["deck"]
+    },
+    "AppParameters": {
+      "title": "AppParameters",
+      "description": "General parameters for the LMS application",
+      "type": "object",
+      "properties": {
+        "aiAssistedSyllabification": { "type": "boolean" },
+        "colorTheme": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/app_data/{docId}/dictionary_words/{wordId}": {
+      "schema": "DictionaryEntry",
+      "description": "Dictionary words stored in a subcollection to avoid main document limits"
+    },
+    "/app_data/{docId}/courses/{courseId}": {
+      "schema": "Course",
+      "description": "Course units stored in a separate subcollection to prevent document bloating"
+    },
+    "/app_data/{docId}/students/{studentId}": {
+      "schema": "Student",
+      "description": "List of students on the platform"
+    },
+    "/app_data/{docId}/student_cursuses/{studentId}": {
+      "schema": "StudentCursus",
+      "description": "Course tracking assignments per student"
+    },
+    "/app_data/{docId}/student_stats/{studentId}": {
+      "schema": "StudentStats",
+      "description": "Gamification metrics per student"
+    },
+    "/app_data/{docId}/students_history/{historyId}": {
+      "schema": "HistoryEvent",
+      "description": "Historical actions of student completions and achievements"
+    },
+    "/app_data/{docId}/srs_decks/{studentId}": {
+      "schema": "SrsDeck",
+      "description": "Spaced repetition datasets per student"
+    }
+  }
+}

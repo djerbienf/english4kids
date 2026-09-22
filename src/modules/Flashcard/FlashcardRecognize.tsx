@@ -1,72 +1,85 @@
 import React from "react";
-import { Button } from "../../components/Button";
 import { FlashcardConfig } from "../../types";
+import { ArrowRight } from "lucide-react";
+import { renderColoredWord, renderColoredSyllables } from "../../utils/wordUtils";
+
+interface ExtendedConfig extends FlashcardConfig {
+  pronunciation?: string;
+  syllables?: string;
+  dictionaryExamples?: string[];
+}
+
+function highlightWord(text: string, word: string) {
+  if (!text) return null;
+  const cleanText = text.replace(/["“”]/g, '');
+  const regex = new RegExp(`(${word})`, 'gi');
+  const parts = cleanText.split(regex);
+  return (
+    <>
+      {parts.map((part, i) => 
+        part.toLowerCase() === word.toLowerCase() ? (
+          <strong key={i} className="text-[#534AB7] font-black">{part}</strong>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+}
 
 interface Props {
-  config: FlashcardConfig;
+  config: ExtendedConfig;
   mcqOptions: string[];
-  mcqSelected: string | null;
+  mcqWrongOptions: string[];
   mcqStatus: 'correct' | 'wrong' | null;
   handleMcqClick: (opt: string) => void;
   setPhase: (phase: 2) => void;
   highlightExample: () => React.ReactNode;
+  noMoreAttempts: boolean;
 }
 
-export function FlashcardRecognize({
-  config, mcqOptions, mcqSelected, mcqStatus, handleMcqClick, setPhase, highlightExample
-}: Props) {
+export function FlashcardRecognize({ config, mcqOptions, mcqWrongOptions, mcqStatus, handleMcqClick, setPhase, highlightExample, noMoreAttempts }: Props) {
   return (
-    <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="grid grid-cols-2 gap-3">
-        {mcqOptions.map((opt) => {
-          const isSelected = mcqSelected === opt;
-          const isCorrect = opt.toLowerCase() === config.word.toLowerCase();
-          
-          let btnClass = "bg-neutral-bg border-2 border-primary-light rounded-[16px] p-4 text-[16px] font-bold text-text-primary hover:border-primary hover:bg-white transition-all";
-          if (mcqStatus !== null) {
-            if (isCorrect) {
-              btnClass = "bg-success-light/20 border-2 border-success text-success-dark rounded-[16px] p-4 text-[16px] font-bold shadow-sm";
-            } else if (isSelected && !isCorrect) {
-              btnClass = "bg-red-50 border-2 border-red-400 text-red-800 rounded-[16px] p-4 text-[16px] font-bold";
-            } else {
-              btnClass = "bg-neutral-bg/50 border-2 border-primary-light/50 rounded-[16px] p-4 text-[16px] font-bold text-text-secondary opacity-50";
-            }
-          }
-
-          return (
-            <button 
-              key={opt}
-              disabled={mcqStatus !== null}
-              onClick={() => handleMcqClick(opt)}
-              className={btnClass}
-            >
-              {opt}
-            </button>
-          );
-        })}
-      </div>
-
-      {mcqStatus !== null && (
-        <div className={`rounded-xl p-4 text-[14px] mt-2 flex gap-3 ${mcqStatus === 'correct' ? 'bg-success-light/20 text-success-dark border border-success/30' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-          <div className="text-[20px]">{mcqStatus === 'correct' ? '🌟' : '🔍'}</div>
-          <div className="text-left">
-            {mcqStatus === 'correct' ? (
-              <>Great job! <strong>{config.word}</strong> = {config.translation_ar}</>
-            ) : (
-              <>Almost! The correct answer is <strong>{config.word}</strong></>
-            )}
-            {(!config.flashcardFeedback || config.flashcardFeedback === "audiosentence") && (
-              <div className="text-[12px] opacity-70 italic mt-1">"{highlightExample()}"</div>
-            )}
-          </div>
+    <div className="flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-300 w-full text-center max-w-md mx-auto">
+      {config.imageUrl && config.flashcardShowImage !== false ? (
+        <img src={config.imageUrl} alt={config.word} className="h-48 object-contain mb-6 max-w-full" />
+      ) : (
+        <div className="text-[48px] font-black text-[#534AB7] mb-6" dir="rtl">
+          {config.translation_ar}
+        </div>
+      )}
+      <h2 className="text-[64px] font-black text-[#534AB7] mb-1 tracking-[-1px]">
+        {config.word}
+      </h2>
+      {config.syllables && (
+        <div className="text-[20px] font-medium mb-1">
+          {renderColoredSyllables(config.syllables)}
+        </div>
+      )}
+      {config.pronunciation && (
+        <p className="text-[20px] font-mono text-[#8888aa] text-center m-0 mb-6 opacity-80">
+          {config.pronunciation}
+        </p>
+      )}
+      
+      {config.dictionaryExamples && config.dictionaryExamples.length > 0 && (
+        <div className="flex flex-col gap-2.5 w-full max-w-sm mx-auto mb-6">
+          {config.dictionaryExamples.map((ex, idx) => (
+            <div key={idx} className="bg-[#EEEDFE] rounded-[16px] py-3.5 px-5 text-center shadow-sm border border-[#534AB7]/10 animate-in fade-in zoom-in-95 duration-200">
+              <p className="text-[15px] text-[#3C3489] font-semibold m-0 leading-relaxed">
+                "{highlightWord(ex, config.word)}"
+              </p>
+            </div>
+          ))}
         </div>
       )}
 
-      {mcqStatus !== null && (
-          <Button onClick={() => setPhase(2)} className="w-full mt-2 py-4 shadow-lg shadow-primary/20 bg-gradient-to-r from-primary-mid to-primary-dark text-white font-bold rounded-[16px] text-[16px] hover:translate-y-[-2px] transition-all">
-            Continue →
-          </Button>
-      )}
+      <button 
+        onClick={() => setPhase(2)} 
+        className="w-full mt-4 py-[17px] px-6 rounded-[18px] bg-[#534AB7] hover:-translate-y-[2px] active:scale-95 hover:shadow-[0_10px_28px_rgba(83,74,183,0.33)] shadow-[0_6px_20px_rgba(83,74,183,0.25)] text-white font-extrabold text-[17px] flex items-center justify-center gap-[10px] transition-all border-none cursor-pointer group"
+      >
+        Got it <ArrowRight size={20} className="transition-transform group-hover:translate-x-1" />
+      </button>
     </div>
   );
 }

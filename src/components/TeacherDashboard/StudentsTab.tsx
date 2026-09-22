@@ -1,8 +1,8 @@
-import React from "react";
+import React, { memo } from "react";
 import { Button } from "../Button";
 
 // Assuming AVATARS needs to be passed in or defined in a shared constants file
-export function StudentsTab({
+export const StudentsTab = memo(function StudentsTab({
   showAddStudentForm,
   setShowAddStudentForm,
   newStudent,
@@ -198,4 +198,4 @@ export function StudentsTab({
       </div>
     </div>
   );
-}
+});

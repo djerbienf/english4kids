@@ -5,18 +5,21 @@ import { DictionaryEntry } from "../../types";
 export function AddWordModal({
   initialWord = "",
   initialData,
+  dictionaryWords = [],
   onClose,
   onSave,
   onDelete
 }: {
   initialWord?: string;
   initialData?: DictionaryEntry;
+  dictionaryWords?: DictionaryEntry[];
   onClose: () => void;
   onSave: (word: DictionaryEntry) => void;
   onDelete?: () => void;
 }) {
   const [error, setError] = useState("");
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
   
   const primarySense = initialData?.senses?.[0];
   const [newWordData, setNewWordData] = useState({
@@ -30,7 +33,137 @@ export function AddWordModal({
     category: primarySense?.category || "",
     synonyms: primarySense?.relations?.synonyms?.join(", ") || "",
     antonyms: primarySense?.relations?.antonyms?.join(", ") || "",
+    forms: initialData?.forms?.join(", ") || "",
+    pronunciation: initialData?.pronunciation_uk || "",
+    imageUrl: primarySense?.assets?.image || "",
+    audioUrl: primarySense?.assets?.audio?.uk || "",
   });
+
+  const handleAutoFill = async () => {
+    const wordToLookup = newWordData.lemma.trim();
+    if (!wordToLookup) return;
+
+    // The internal dictionary is the SINGLE SOURCE OF TRUTH.
+    // If the word already exists in the internal dictionary, populate from it instead of fetching externally.
+    const existingInternalWord = dictionaryWords?.find(w => 
+      (w.lemma?.toLowerCase() === wordToLookup.toLowerCase()) || 
+      (w.word?.toLowerCase() === wordToLookup.toLowerCase())
+    );
+
+    if (existingInternalWord) {
+      const primarySense = existingInternalWord.senses?.[0];
+      setNewWordData(prev => ({
+        ...prev,
+        translation: primarySense?.translation_ar || existingInternalWord.translation || prev.translation,
+        definition: primarySense?.gloss || existingInternalWord.definition || prev.definition,
+        example: (primarySense?.examples && primarySense.examples.length > 0) ? primarySense.examples[0] : existingInternalWord.example || prev.example,
+        part_of_speech: existingInternalWord.part_of_speech || prev.part_of_speech,
+        cefr_level: primarySense?.cefr_level || prev.cefr_level,
+        difficulty: primarySense?.difficulty?.toString() || prev.difficulty,
+        category: primarySense?.category || prev.category,
+        synonyms: primarySense?.relations?.synonyms?.join(", ") || prev.synonyms,
+        antonyms: primarySense?.relations?.antonyms?.join(", ") || prev.antonyms,
+        forms: existingInternalWord.forms?.join(", ") || prev.forms,
+        pronunciation: existingInternalWord.pronunciation_uk || prev.pronunciation,
+        imageUrl: primarySense?.assets?.image || prev.imageUrl,
+        audioUrl: primarySense?.assets?.audio?.uk || prev.audioUrl,
+      }));
+      return;
+    }
+
+    setIsFetching(true);
+    setError("");
+    try {
+      const dictPromise = fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(wordToLookup)}`)
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null);
+
+      const transPromise = fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(wordToLookup)}&langpair=en|ar`)
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null);
+
+      const [dictResult, transResult] = await Promise.all([dictPromise, transPromise]);
+
+      let autoTranslation = "";
+      if (transResult && transResult.responseData && transResult.responseData.translatedText) {
+        autoTranslation = transResult.responseData.translatedText.trim();
+      }
+
+      let autoDefinition = "";
+      let autoExample = "";
+      let autoPos = "";
+      let autoPronunciation = "";
+      let autoAudioUrl = "";
+      let autoSynonyms: string[] = [];
+      let autoAntonyms: string[] = [];
+
+      if (dictResult && Array.isArray(dictResult) && dictResult.length > 0) {
+        const entry = dictResult[0];
+        autoPronunciation = entry.phonetic || (entry.phonetics && entry.phonetics.find((p: any) => p.text)?.text) || "";
+
+        if (entry.phonetics && Array.isArray(entry.phonetics)) {
+          const audioObj = entry.phonetics.find((p: any) => p.audio && p.audio.endsWith(".mp3"));
+          if (audioObj) {
+            autoAudioUrl = audioObj.audio;
+          }
+        }
+
+        if (entry.meanings && Array.isArray(entry.meanings)) {
+          const firstMeaning = entry.meanings[0];
+          if (firstMeaning) {
+            autoPos = firstMeaning.partOfSpeech || "";
+            if (firstMeaning.definitions && Array.isArray(firstMeaning.definitions) && firstMeaning.definitions.length > 0) {
+              const firstDef = firstMeaning.definitions[0];
+              autoDefinition = firstDef.definition || "";
+              autoExample = firstDef.example || "";
+            }
+            if (firstMeaning.synonyms && Array.isArray(firstMeaning.synonyms)) {
+              autoSynonyms = firstMeaning.synonyms.slice(0, 5);
+            }
+            if (firstMeaning.antonyms && Array.isArray(firstMeaning.antonyms)) {
+              autoAntonyms = firstMeaning.antonyms.slice(0, 5);
+            }
+          }
+
+          entry.meanings.forEach((meaning: any) => {
+            if (autoSynonyms.length === 0 && meaning.synonyms && Array.isArray(meaning.synonyms)) {
+              autoSynonyms = meaning.synonyms.slice(0, 5);
+            }
+            if (autoAntonyms.length === 0 && meaning.antonyms && Array.isArray(meaning.antonyms)) {
+              autoAntonyms = meaning.antonyms.slice(0, 5);
+            }
+            if (!autoExample && meaning.definitions && Array.isArray(meaning.definitions)) {
+              const withEx = meaning.definitions.find((d: any) => d.example);
+              if (withEx) {
+                autoExample = withEx.example;
+              }
+            }
+          });
+        }
+      }
+
+      setNewWordData(prev => ({
+        ...prev,
+        translation: autoTranslation || prev.translation,
+        definition: autoDefinition || prev.definition,
+        example: autoExample || prev.example,
+        part_of_speech: autoPos.toLowerCase() || prev.part_of_speech,
+        pronunciation: autoPronunciation || prev.pronunciation,
+        audioUrl: autoAudioUrl || prev.audioUrl,
+        synonyms: autoSynonyms.length > 0 ? autoSynonyms.join(", ") : prev.synonyms,
+        antonyms: autoAntonyms.length > 0 ? autoAntonyms.join(", ") : prev.antonyms,
+      }));
+
+      if (!dictResult && !autoTranslation) {
+        setError("Word not found in online dictionary and translation APIs.");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Failed to fetch dictionary information. Please check your connection.");
+    } finally {
+      setIsFetching(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
@@ -51,14 +184,31 @@ export function AddWordModal({
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <input
-            type="text"
-            placeholder="Word (English) *"
-            className="w-full bg-neutral-bg border border-primary-light rounded-lg p-3 text-[14px]"
-            value={newWordData.lemma}
-            onChange={(e) => setNewWordData({ ...newWordData, lemma: e.target.value })}
-            disabled={!!initialWord && !initialData}
-          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Word (English) *"
+              className="flex-1 bg-neutral-bg border border-primary-light rounded-lg p-3 text-[14px]"
+              value={newWordData.lemma}
+              onChange={(e) => setNewWordData({ ...newWordData, lemma: e.target.value })}
+              disabled={!!initialWord && !initialData}
+            />
+            {!initialData && (
+              <button
+                type="button"
+                onClick={handleAutoFill}
+                disabled={isFetching || !newWordData.lemma.trim()}
+                className="px-3 bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold rounded-lg text-xs transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Fetch definition & Arabic translation online"
+              >
+                {isFetching ? (
+                  <span className="w-4 h-4 border-2 border-purple-700 border-t-transparent rounded-full animate-spin"></span>
+                ) : (
+                  "Fetch 🔍"
+                )}
+              </button>
+            )}
+          </div>
           <input
             type="text"
             placeholder="Translation (Arabic) *"
@@ -119,34 +269,19 @@ export function AddWordModal({
             <option value="4">Difficulty: 4 (Hard)</option>
             <option value="5">Difficulty: 5 (Very Hard)</option>
           </select>
-          <select
+          <input
+            type="text"
+            list="categories-list"
+            placeholder="Category / Word Family (e.g. Technology)"
             className="w-full bg-neutral-bg border border-primary-light rounded-lg p-3 text-[14px]"
             value={newWordData.category}
             onChange={(e) => setNewWordData({ ...newWordData, category: e.target.value })}
-          >
-            <option value="">Select Category...</option>
-            <option value="Family">Family</option>
-            <option value="Food">Food</option>
-            <option value="Colors">Colors</option>
-            <option value="Numbers">Numbers</option>
-            <option value="Animals">Animals</option>
-            <option value="Body Parts">Body Parts</option>
-            <option value="Clothes">Clothes</option>
-            <option value="House and Rooms">House and Rooms</option>
-            <option value="School">School</option>
-            <option value="Toys and Games">Toys and Games</option>
-            <option value="Weather and Seasons">Weather and Seasons</option>
-            <option value="Nature">Nature</option>
-            <option value="Transportation">Transportation</option>
-            <option value="Actions">Actions</option>
-            <option value="Feelings">Feelings</option>
-            <option value="Time and Days">Time and Days</option>
-            <option value="Places in Town">Places in Town</option>
-            <option value="Shapes">Shapes</option>
-            <option value="Opposites">Opposites</option>
-            <option value="Daily Routine">Daily Routine</option>
-            <option value="Other">Other</option>
-          </select>
+          />
+          <datalist id="categories-list">
+            {Array.from(new Set(dictionaryWords.map(w => w.senses?.[0]?.category).filter(Boolean))).map((cat) => (
+              <option key={cat} value={cat} />
+            ))}
+          </datalist>
           <input
             type="text"
             placeholder="Synonyms (comma separated)"
@@ -160,6 +295,34 @@ export function AddWordModal({
             className="w-full bg-neutral-bg border border-primary-light rounded-lg p-3 text-[14px]"
             value={newWordData.antonyms}
             onChange={(e) => setNewWordData({ ...newWordData, antonyms: e.target.value })}
+          />
+          <input
+            type="text"
+            placeholder="Forms/Derivations (e.g. goes, went, gone)"
+            className="w-full bg-neutral-bg border border-primary-light rounded-lg p-3 text-[14px]"
+            value={newWordData.forms}
+            onChange={(e) => setNewWordData({ ...newWordData, forms: e.target.value })}
+          />
+          <input
+            type="text"
+            placeholder="Pronunciation (e.g. /haʊs/)"
+            className="w-full bg-neutral-bg border border-primary-light rounded-lg p-3 text-[14px]"
+            value={newWordData.pronunciation}
+            onChange={(e) => setNewWordData({ ...newWordData, pronunciation: e.target.value })}
+          />
+          <input
+            type="text"
+            placeholder="Image URL"
+            className="w-full bg-neutral-bg border border-primary-light rounded-lg p-3 text-[14px]"
+            value={newWordData.imageUrl}
+            onChange={(e) => setNewWordData({ ...newWordData, imageUrl: e.target.value })}
+          />
+          <input
+            type="text"
+            placeholder="Audio URL"
+            className="w-full bg-neutral-bg border border-primary-light rounded-lg p-3 text-[14px]"
+            value={newWordData.audioUrl}
+            onChange={(e) => setNewWordData({ ...newWordData, audioUrl: e.target.value })}
           />
         </div>
         <div className="flex justify-end gap-3 mt-8 border-t border-primary-light pt-6">
@@ -208,26 +371,55 @@ export function AddWordModal({
                 setError("Word and Translation are required.");
                 return;
               }
+
+              // Duplication check only if we are creating a new word or changing the lemma
+              if (!initialData || initialData.lemma !== newWordData.lemma) {
+                const isDuplicateLemma = dictionaryWords.some(
+                  (w) => w.lemma?.toLowerCase() === newWordData.lemma.toLowerCase()
+                );
+                const isDuplicateForm = dictionaryWords.find(
+                  (w) => w.forms && w.forms.some(f => f.toLowerCase() === newWordData.lemma.toLowerCase())
+                );
+                
+                if (isDuplicateLemma) {
+                  setError("This word already exists in your dictionary as a main entry.");
+                  return;
+                }
+                if (isDuplicateForm) {
+                  setError(`This word already exists as a form/derivation of the word "${isDuplicateForm.lemma}".`);
+                  return;
+                }
+              }
+
               setError("");
               
               const synonymsList = newWordData.synonyms.split(",").map(s => s.trim()).filter(Boolean);
               const antonymsList = newWordData.antonyms.split(",").map(s => s.trim()).filter(Boolean);
+              const formsList = newWordData.forms.split(",").map(s => s.trim()).filter(Boolean);
               
               onSave({
                 id: initialData ? initialData.id : Date.now().toString(),
                 lemma: newWordData.lemma,
                 part_of_speech: newWordData.part_of_speech || undefined,
+                forms: formsList,
+                pronunciation_uk: newWordData.pronunciation || undefined,
                 senses: [{
                   sense_id: initialData?.senses?.[0]?.sense_id || (Date.now().toString() + "_sense"),
                   gloss: newWordData.definition,
                   translation_ar: newWordData.translation,
-                  examples: newWordData.example ? [newWordData.example] : [],
+                  examples: newWordData.example ? [newWordData.example.replace(/["“”]/g, '')] : [],
                   cefr_level: newWordData.cefr_level,
                   difficulty: parseInt(newWordData.difficulty, 10) || undefined,
                   category: newWordData.category || undefined,
                   relations: {
                       synonyms: synonymsList.length > 0 ? synonymsList : undefined,
                       antonyms: antonymsList.length > 0 ? antonymsList : undefined,
+                  },
+                  assets: {
+                    image: newWordData.imageUrl || undefined,
+                    audio: {
+                      uk: newWordData.audioUrl || undefined
+                    }
                   }
                 }],
                 word: newWordData.lemma,

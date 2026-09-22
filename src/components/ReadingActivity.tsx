@@ -5,27 +5,23 @@ import { Cloze } from "./Cloze";
 import { motion, AnimatePresence } from "motion/react";
 import { InteractiveText } from "../modules/Reading/InteractiveText";
 import { UnscrambleStep } from "../modules/Reading/UnscrambleStep";
+import { BookOpen } from "lucide-react";
 
 interface ReadingActivityProps {
   config: ReadingConfig;
   onComplete: () => void;
 }
 
+import { useStore } from "../store/useStore";
+
 export function ReadingActivity({ config, onComplete }: ReadingActivityProps) {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [interactionState, setInteractionState] = useState<"text" | "cloze" | "unscramble">("text");
   const [interactionSubIndex, setInteractionSubIndex] = useState(0);
+  const [isDictionaryMode, setIsDictionaryMode] = useState(false);
 
   // Fetch global dictionary directly so it's always fresh
-  const globalDictionary = React.useMemo(() => {
-    try {
-      const persisted = localStorage.getItem("lms_dictionary_data");
-      if (persisted) return JSON.parse(persisted);
-    } catch (e) {
-      console.error(e);
-    }
-    return [];
-  }, []);
+  const globalDictionary = useStore((state) => state.dictionaryWords);
 
   const titleText =
     config.readingType === "dialogue"
@@ -161,6 +157,9 @@ export function ReadingActivity({ config, onComplete }: ReadingActivityProps) {
     handleNext();
   };
 
+  // Active vocabulary depends on whether Dictionary Mode is toggled ON
+  const activeVocab = isDictionaryMode ? combinedVocabulary : [];
+
   // Format the text for better reading experience
   const formatText = (text: string, type: string) => {
     if (!text) return null;
@@ -179,7 +178,7 @@ export function ReadingActivity({ config, onComplete }: ReadingActivityProps) {
               <span className="text-[28px] text-text-primary leading-tight font-medium">
                 <InteractiveText
                   text={match[2]}
-                  vocabulary={combinedVocabulary}
+                  vocabulary={activeVocab}
                 />
               </span>
             </div>
@@ -190,7 +189,7 @@ export function ReadingActivity({ config, onComplete }: ReadingActivityProps) {
             key={i}
             className="mb-6 text-[26px] leading-relaxed text-text-primary"
           >
-            <InteractiveText text={line} vocabulary={combinedVocabulary} />
+            <InteractiveText text={line} vocabulary={activeVocab} />
           </p>
         );
       });
@@ -205,7 +204,7 @@ export function ReadingActivity({ config, onComplete }: ReadingActivityProps) {
             className="mb-8 text-[32px] leading-relaxed text-text-primary"
             style={{ fontFamily: "Georgia, serif" }}
           >
-            <InteractiveText text={para} vocabulary={combinedVocabulary} />
+            <InteractiveText text={para} vocabulary={activeVocab} />
           </p>
         );
       });
@@ -218,7 +217,7 @@ export function ReadingActivity({ config, onComplete }: ReadingActivityProps) {
           key={i}
           className="mb-8 text-[30px] leading-relaxed text-text-primary font-medium"
         >
-          <InteractiveText text={para} vocabulary={combinedVocabulary} />
+          <InteractiveText text={para} vocabulary={activeVocab} />
         </p>
       );
     });
@@ -310,10 +309,23 @@ export function ReadingActivity({ config, onComplete }: ReadingActivityProps) {
               </div>
             )}
 
-          <div className="text-center mb-16 w-full">
-            <h2 className="text-[16px] font-bold text-text-secondary font-sans tracking-wide">
+          <div className="w-full flex items-center justify-between mb-12 px-2 font-sans">
+            <h2 className="text-[15px] font-bold text-text-secondary tracking-wide">
               {currentSlideIndex + 1} / {slides.length}
             </h2>
+
+            <button
+              onClick={() => setIsDictionaryMode((prev) => !prev)}
+              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                isDictionaryMode
+                  ? "bg-primary/10 text-primary-dark border-primary/30 shadow-sm"
+                  : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-700"
+              }`}
+              title={isDictionaryMode ? "Disable interactive dictionary" : "Enable interactive dictionary"}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>{isDictionaryMode ? "Dictionary Enabled" : "Enable Dictionary"}</span>
+            </button>
           </div>
 
           <div className="flex-1 mb-[120px] flex items-center justify-center w-full">

@@ -1,14 +1,27 @@
 import React, { useState } from "react";
-import { Lesson, StudentStats } from "../types";
+import { Lesson, StudentStats, SRSDeckItem } from "../types";
 import { Button } from "../components/Button";
 import { StudentDashboard } from "./StudentDashboard";
 import { LessonRunner } from "./LessonRunner";
+import { SRSRunner } from "./SRSRunner";
+import { SpiralTestRunner } from "../components/SpiralTestRunner";
 import { MOCK_STATS } from "../data/mockData";
 import { ensureInitialized } from "../utils/initData";
 import { buildConfiguredLesson } from "../utils/lessonRunnerBuilder";
+import { addWordsToSRS, getDueCards, syncSRSSession } from "../utils/srs";
+import { useStore } from "../store/useStore";
 
 export function StudentSpace() {
+  const appParameters = useStore((state) => state.appParameters);
   ensureInitialized();
+  const dictionaryWords = useStore((state) => state.dictionaryWords);
+  const studentsList = useStore((state) => state.studentsList);
+  const studentStatsMap = useStore((state) => state.studentStats);
+  const setStudentStatsMap = useStore((state) => state.setStudentStats);
+  const studentHistoryAll = useStore((state) => state.studentHistory);
+  const setStudentHistoryAll = useStore((state) => state.setStudentHistory);
+  const courseData = useStore((state) => state.courseData);
+  const studentCursuses = useStore((state) => state.studentCursuses);
 
   // Authentication states
   const [currentStudentId, setCurrentStudentId] = useState<string | null>(
@@ -19,26 +32,18 @@ export function StudentSpace() {
   const isLoggedIn = !!currentStudentId;
 
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
+  const [activeTestLesson, setActiveTestLesson] = useState<Lesson | null>(null);
+  const [isSRSMode, setIsSRSMode] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
 
-  // Read data families from localStorage
-  const getStudents = () =>
-    JSON.parse(localStorage.getItem("lms_students") || "[]");
-  const getStats = () =>
-    JSON.parse(localStorage.getItem("lms_student_stats") || "{}");
-  const getStudentHistory = () =>
-    JSON.parse(localStorage.getItem("lms_student_history") || "[]");
+  const currentStudent = studentsList.find((s: any) => s.id === currentStudentId);
 
-  const students = getStudents();
-  const currentStudent = students.find((s: any) => s.id === currentStudentId);
-
-  const [stats, setStats] = useState<StudentStats>(() => {
+  const stats = React.useMemo(() => {
     if (currentStudentId) {
-      const allStats = getStats();
       return (
-        allStats[currentStudentId] || {
+        studentStatsMap[currentStudentId] || {
           xp: 0,
           streak: 1,
           dailyGoalProgress: 0,
@@ -47,51 +52,106 @@ export function StudentSpace() {
       );
     }
     return MOCK_STATS;
-  });
+  }, [currentStudentId, studentStatsMap]);
 
-  // Track state changes to local storage
+  const dueCards = React.useMemo(() => {
+    return currentStudentId ? getDueCards(currentStudentId) : [];
+  }, [currentStudentId, isSRSMode, useStore((state) => state.srsDecks)]);
+
+  // Ensure daily SRS tick
   React.useEffect(() => {
     if (currentStudentId) {
-      const allStats = getStats();
-      allStats[currentStudentId] = stats;
-      localStorage.setItem("lms_student_stats", JSON.stringify(allStats));
+      syncSRSSession(currentStudentId);
     }
-  }, [stats, currentStudentId]);
+  }, [currentStudentId]);
 
-  const courseDataRaw = localStorage.getItem("lms_course_data");
-  const courseData = courseDataRaw ? JSON.parse(courseDataRaw) : [];
+  const lessonsList = useStore((state) => state.lessonsList);
 
-  const studentCursusesRaw = localStorage.getItem("lms_student_cursuses");
-  const studentCursuses = studentCursusesRaw ? JSON.parse(studentCursusesRaw) : {};
   const currentStudentCursus = currentStudentId ? (studentCursuses[currentStudentId] || []) : [];
-
+  
+  // 1. Process units assigned to the student
   const assignedCourseData = courseData.map((unit: any) => {
     // Has the entire unit been assigned?
     const hasUnitAssigned = currentStudentCursus.some((c: any) => c.type === 'unit' && c.unitId === unit.id);
     
-    if (hasUnitAssigned) {
-      return unit;
-    }
+    // Resolve lessons in the unit (checking both unit.lessonIds and inline unit.lessons)
+    const lessonsInUnit = unit.lessonIds && unit.lessonIds.length > 0
+      ? unit.lessonIds.map((id: string) => lessonsList.find(l => l.id === id)).filter(Boolean)
+      : (unit.lessons || []);
 
-    // Otherwise, check if specific lessons were assigned
-    const assignedLessons = unit.lessons.filter((lesson: any) => {
-      return currentStudentCursus.some((c: any) => c.type === 'lesson' && c.lessonId === lesson.id);
+    if (hasUnitAssigned) {
+      // Show all lessons in the assigned unit (fall back to all if none are explicitly "Published")
+      const publishedLessons = lessonsInUnit.filter((l: any) => l && l.status === 'Published');
+      const lessonsToShow = publishedLessons.length > 0 ? publishedLessons : lessonsInUnit;
+      
+      if (lessonsToShow.length > 0) {
+        return { ...unit, lessons: lessonsToShow };
+      }
+      return null;
+    }
+    
+    // Check if specific lessons inside this unit were assigned directly
+    const assignedLessons = lessonsInUnit.filter((lesson: any) => {
+      return lesson && currentStudentCursus.some((c: any) => c.type === 'lesson' && c.lessonId === lesson.id);
     });
 
     if (assignedLessons.length > 0) {
       return { ...unit, lessons: assignedLessons };
     }
-
     return null;
   }).filter(Boolean);
 
-  const studentHistoryAll = getStudentHistory();
+  // 2. Process independent lessons assigned directly (not in any unit)
+  const standaloneAssignedLessons = currentStudentCursus
+    .filter((c: any) => c.type === 'lesson')
+    .map((c: any) => lessonsList.find(l => l.id === c.lessonId))
+    .filter(Boolean)
+    .filter((lesson: any) => {
+       // Only include it here if it's NOT already included in a unit above
+       for (const u of assignedCourseData) {
+         if (u.lessons.some((l: any) => l.id === lesson.id)) return false;
+       }
+       return true;
+    });
+
+  if (standaloneAssignedLessons.length > 0) {
+    assignedCourseData.push({
+      id: 'standalone_lessons',
+      title: 'Independent Lessons',
+      lessons: standaloneAssignedLessons
+    });
+  }
+
+  // 3. Process tests assigned directly
+  const assignedTests = currentStudentCursus
+    .filter((c: any) => c.type === 'test')
+    .map((c: any) => lessonsList.find(l => l.id === c.lessonId))
+    .filter(Boolean);
+
+  if (assignedTests.length > 0) {
+    assignedCourseData.push({
+      id: 'assigned_tests',
+      title: 'Evaluations & Tests',
+      lessons: assignedTests
+    });
+  }
+
   const currentStudentHistory = studentHistoryAll.filter(
     (h: any) => h.studentId === currentStudentId,
   );
 
   const handleFinishLesson = (xpEarned: number) => {
     if (!currentStudentId || !activeLesson) return;
+
+    // Inject flashcard words to SRS Deck
+    const flashcardActs = (activeLesson.activities || []).filter(a => a.type === "flashcard");
+    if (flashcardActs.length > 0) {
+       addWordsToSRS(currentStudentId, flashcardActs.map(a => ({
+          word: (a as any).word || "",
+          translation_ar: (a as any).translation_ar || "",
+          example: (a as any).example || ""
+       })));
+    }
 
     // 1. Update visual and storage metrics
     const updatedStats = {
@@ -100,11 +160,11 @@ export function StudentSpace() {
       streak: stats.streak + 1,
       dailyGoalProgress: stats.dailyGoalProgress + 1,
     };
-    setStats(updatedStats);
-
-    const allStats = getStats();
-    allStats[currentStudentId] = updatedStats;
-    localStorage.setItem("lms_student_stats", JSON.stringify(allStats));
+    
+    setStudentStatsMap({
+      ...studentStatsMap,
+      [currentStudentId]: updatedStats
+    });
 
     // 2. Add to student's history indicating finish
     const newHistoryEvent = {
@@ -115,10 +175,8 @@ export function StudentSpace() {
       type: "lesson_finish",
       timestamp: new Date().toISOString(),
     };
-    localStorage.setItem(
-      "lms_student_history",
-      JSON.stringify([...studentHistoryAll, newHistoryEvent]),
-    );
+    
+    setStudentHistoryAll([...studentHistoryAll, newHistoryEvent]);
 
     setActiveLesson(null);
   };
@@ -126,7 +184,7 @@ export function StudentSpace() {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError("");
-    const matched = getStudents().find(
+    const matched = studentsList.find(
       (s: any) =>
         s.username.toLowerCase() === username.trim().toLowerCase() &&
         s.password === password,
@@ -134,16 +192,6 @@ export function StudentSpace() {
     if (matched) {
       localStorage.setItem("lms_current_student_id", matched.id);
       setCurrentStudentId(matched.id);
-
-      const allStats = getStats();
-      setStats(
-        allStats[matched.id] || {
-          xp: 0,
-          streak: 1,
-          dailyGoalProgress: 0,
-          dailyGoalTotal: 3,
-        },
-      );
       setLoginError("");
     } else {
       setLoginError(
@@ -174,20 +222,11 @@ export function StudentSpace() {
           type: "unit_start",
           timestamp: new Date().toISOString(),
         };
-        localStorage.setItem(
-          "lms_student_history",
-          JSON.stringify([...getStudentHistory(), newHistoryEvent]),
-        );
+        setStudentHistoryAll([...studentHistoryAll, newHistoryEvent]);
       }
     }
 
-    let dictionaryWords: any[] = [];
-    try {
-      const stored = localStorage.getItem("lms_dictionary_data");
-      if (stored) dictionaryWords = JSON.parse(stored);
-    } catch {}
-
-    const configuredLesson = buildConfiguredLesson(resolvedLesson, dictionaryWords);
+    const configuredLesson = buildConfiguredLesson(resolvedLesson, dictionaryWords, appParameters);
     setActiveLesson(configuredLesson);
   };
 
@@ -255,11 +294,39 @@ export function StudentSpace() {
     );
   }
 
+  if (isSRSMode && currentStudentId) {
+    return (
+      <SRSRunner
+         studentId={currentStudentId}
+         dueCards={dueCards}
+         onComplete={() => setIsSRSMode(false)}
+         onExit={() => setIsSRSMode(false)}
+      />
+    );
+  }
+
+  if (activeTestLesson && currentStudentId) {
+    return (
+      <SpiralTestRunner
+        studentId={currentStudentId}
+        lesson={activeTestLesson}
+        onFinish={(xpEarned) => {
+          handleFinishLesson(xpEarned);
+          setActiveTestLesson(null);
+        }}
+        onBack={() => setActiveTestLesson(null)}
+      />
+    );
+  }
+
   if (activeLesson) {
     return (
       <LessonRunner
         lesson={activeLesson}
-        onFinish={handleFinishLesson}
+        onFinish={(xpEarned) => {
+          setActiveTestLesson(activeLesson);
+          setActiveLesson(null);
+        }}
         onBack={() => setActiveLesson(null)}
       />
     );
@@ -267,11 +334,14 @@ export function StudentSpace() {
 
   return (
     <StudentDashboard
+      studentId={currentStudentId}
       studentName={currentStudent?.name || username}
       stats={stats}
       courseData={assignedCourseData}
       studentHistory={currentStudentHistory}
+      dueCards={dueCards}
       onStartLesson={handleStartLesson}
+      onStartSRS={() => setIsSRSMode(true)}
       onLogout={handleLogout}
     />
   );

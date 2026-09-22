@@ -1,5 +1,6 @@
 import React from "react";
 import { formatRelativeTime } from "../../utils/dateUtils";
+import { useStore } from "../../store/useStore";
 
 export function TrackingTabHistory({
   selectedTrackingStudent,
@@ -8,9 +9,7 @@ export function TrackingTabHistory({
   selectedTrackingStudent: string;
   courseData: any[];
 }) {
-  const historyData = JSON.parse(
-    localStorage.getItem("lms_student_history") || "[]",
-  );
+  const historyData = useStore((state) => state.studentHistory);
   const studentHistory = historyData
     .filter((h: any) => h.studentId === selectedTrackingStudent)
     .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());

@@ -19,6 +19,12 @@ export function SelectFlashcardWordsModal({
   const [filterCategory, setFilterCategory] = useState("");
   const [filterLevel, setFilterLevel] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(selectedWordIds));
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterCategory, filterLevel]);
 
   const filteredWords = dictionaryWords.filter(w => {
     if (searchTerm) {
@@ -106,7 +112,7 @@ export function SelectFlashcardWordsModal({
               </tr>
             </thead>
             <tbody>
-              {filteredWords.map(w => {
+              {filteredWords.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(w => {
                 const isAlreadyUsed = alreadyUsedWordIds.has(w.id);
                 return (
                   <tr key={w.id} className={`border-b border-primary-light/50 transition-colors ${isAlreadyUsed && !selectedIds.has(w.id) ? 'bg-orange-50/30' : 'hover:bg-neutral-bg/50'}`}>
@@ -150,6 +156,40 @@ export function SelectFlashcardWordsModal({
             </tbody>
           </table>
         </div>
+
+        {filteredWords.length > itemsPerPage && (() => {
+          const totalPages = Math.ceil(filteredWords.length / itemsPerPage);
+          return (
+            <div className="flex justify-between items-center mt-4 p-2.5 bg-neutral-bg/30 rounded-xl border border-primary-light/50 text-[13px]">
+              <div className="text-text-secondary">
+                Affichage de <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> à{" "}
+                <span className="font-semibold">{Math.min(currentPage * itemsPerPage, filteredWords.length)}</span> sur{" "}
+                <span className="font-semibold">{filteredWords.length}</span> mots
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-2.5 py-1 rounded bg-white border border-primary-light text-primary text-xs hover:bg-primary-light/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer font-bold"
+                >
+                  &larr; Précédentlarr; Previous
+                </button>
+                <span className="px-3 text-text-secondary font-medium">
+                  Page {currentPage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-2.5 py-1 rounded bg-white border border-primary-light text-primary text-xs hover:bg-primary-light/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer font-bold"
+                >
+                  Next &rarr;
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-primary-light">
           <button onClick={onClose} className="px-6 py-2 rounded-full font-bold transition-all bg-white border-2 border-primary-light text-primary hover:bg-neutral-bg">

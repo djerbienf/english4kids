@@ -1,9 +1,14 @@
-import React from "react";
+import React, { memo } from "react";
 import { Button } from "../Button";
 import { TrackingTabAssignedCourses } from "./TrackingTabAssignedCourses";
 import { TrackingTabHistory } from "./TrackingTabHistory";
+import { StudentObjectivesProgress } from "./StudentObjectivesProgress";
+import { StudentWritingSubmissions } from "./StudentWritingSubmissions";
+import { AnalyticsInsights } from "./AnalyticsInsights";
+import { calculateRetentionRate, getSRSStats } from "../../utils/srs";
+import { useStore } from "../../store/useStore";
 
-export function TrackingTab({
+export const TrackingTab = memo(function TrackingTab({
   selectedTrackingStudent,
   setSelectedTrackingStudent,
   isAssigningFlow,
@@ -32,6 +37,7 @@ export function TrackingTab({
   setConfirmRemoveId: (id: string | null) => void;
   AVATARS: { id: string; src: string; label: string }[];
 }) {
+  const studentHistoryAll = useStore((state) => state.studentHistory);
   return (
     <div className="space-y-8">
       <h2 className="text-[20px] font-bold">
@@ -72,7 +78,7 @@ export function TrackingTab({
             </h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div className="bg-neutral-bg p-4 rounded-[16px] border border-primary-light">
               <span className="text-text-secondary text-[14px] font-medium">
                 Experience Points
@@ -96,9 +102,42 @@ export function TrackingTab({
                 Days
               </p>
             </div>
+            {(() => {
+              const srsStats = getSRSStats(selectedTrackingStudent);
+              const retention = calculateRetentionRate(selectedTrackingStudent);
+              return (
+                <div className="bg-neutral-bg p-4 rounded-[16px] border border-primary-light">
+                  <span className="text-text-secondary text-[14px] font-medium">
+                    Word Retention Rate
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <p className={`text-[18px] font-bold mt-1 ${retention > 80 ? 'text-green-600' : retention > 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                      🧠 {srsStats.total === 0 ? "N/A" : `${retention}%`}
+                    </p>
+                    <span className="text-[11px] text-text-secondary mt-1">{srsStats.total} total words</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
-          <div className="mb-6 border-t border-primary-light pt-6">
+          <div className="mb-6 border-t border-primary-light pt-6 space-y-8">
+            <AnalyticsInsights
+              studentId={selectedTrackingStudent}
+              studentHistory={studentHistoryAll}
+              courseData={courseData}
+            />
+
+            <StudentObjectivesProgress
+              studentId={selectedTrackingStudent}
+              courseData={courseData}
+              studentHistory={studentHistoryAll}
+            />
+
+            <StudentWritingSubmissions
+              selectedTrackingStudent={selectedTrackingStudent}
+            />
+
             <TrackingTabAssignedCourses
               selectedTrackingStudent={selectedTrackingStudent}
               isAssigningFlow={isAssigningFlow}
@@ -136,6 +175,9 @@ export function TrackingTab({
                     Total XP
                   </th>
                   <th className="pb-2 font-medium text-text-secondary">
+                    Retention (SRS)
+                  </th>
+                  <th className="pb-2 font-medium text-text-secondary">
                     Action
                   </th>
                 </tr>
@@ -153,14 +195,13 @@ export function TrackingTab({
                   </tr>
                 ) : (
                   studentsList.map((student, idx) => {
-                    const historyData = JSON.parse(
-                      localStorage.getItem("lms_student_history") || "[]",
-                    );
-                    const studentHist = historyData.filter(
+                    const studentHist = studentHistoryAll.filter(
                       (h: any) =>
                         h.studentId === student.id &&
                         h.type === "lesson_finish",
                     );
+                    const retention = calculateRetentionRate(student.id);
+                    const srsStats = getSRSStats(student.id);
                     return (
                       <tr key={student.id}>
                         <td className="py-3">
@@ -193,13 +234,23 @@ export function TrackingTab({
                           {(studentStats[student.id] || { xp: 0 }).xp} XP
                         </td>
                         <td className="py-3">
+                          {srsStats.total === 0 ? (
+                             <span className="text-text-secondary italic">No words yet</span>
+                          ) : (
+                            <div className="flex flex-col">
+                              <span className={`font-bold ${retention > 80 ? 'text-green-600' : retention > 50 ? 'text-amber-500' : 'text-red-500'}`}>{retention}%</span>
+                              <span className="text-[11px] text-text-secondary">{srsStats.total} words learning</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3">
                           <button
                             onClick={() =>
                               setSelectedTrackingStudent(student.id)
                             }
                             className="text-primary hover:underline font-bold text-xs"
                           >
-                            View Details / History
+                            View Details
                           </button>
                         </td>
                       </tr>
@@ -213,4 +264,4 @@ export function TrackingTab({
       )}
     </div>
   );
-}
+});

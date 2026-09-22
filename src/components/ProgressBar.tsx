@@ -6,16 +6,16 @@ interface ProgressBarProps {
 }
 
 export function ProgressBar({ current, total }: ProgressBarProps) {
-  const percentage = Math.round((current / total) * 100);
-  
   return (
-    <div className="w-full">
-      <div className="h-[10px] w-full bg-primary-light rounded-[10px] overflow-hidden">
-        <div 
-          className="h-full bg-primary transition-all duration-300 ease-in-out"
-          style={{ width: `${percentage}%` }}
+    <div className="w-full flex gap-1 mb-2">
+      {Array.from({ length: total }).map((_, i) => (
+        <div
+          key={i}
+          className={`flex-1 h-2 rounded-[10px] transition-colors duration-300 ${
+            i < current - 1 ? 'bg-[#534AB7]' : i === current - 1 ? 'bg-[#AFA9EC]' : 'bg-[#EEEEF8]'
+          }`}
         />
-      </div>
+      ))}
     </div>
   );
 }

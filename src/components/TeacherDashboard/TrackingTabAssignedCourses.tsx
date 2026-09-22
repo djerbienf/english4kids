@@ -1,5 +1,6 @@
 import React from "react";
 import { Button } from "../../components/Button";
+import { useStore } from "../../store/useStore";
 
 interface Props {
   selectedTrackingStudent: string;
@@ -24,6 +25,8 @@ export function TrackingTabAssignedCourses({
   confirmRemoveId,
   setConfirmRemoveId,
 }: Props) {
+  const studentHistoryAll = useStore((state) => state.studentHistory);
+  const lessonsList = useStore((state) => state.lessonsList);
   return (
     <>
       <div className="flex justify-between items-center mb-4">
@@ -43,29 +46,59 @@ export function TrackingTabAssignedCourses({
       
       {isAssigningFlow && (
         <div className="bg-neutral-bg p-4 rounded-[12px] border border-primary-light mb-4">
-          <h5 className="font-bold text-[14px] mb-2">Select a unit to assign:</h5>
+          <h5 className="font-bold text-[14px] mb-2">Select a unit or individual lesson to assign:</h5>
           <div className="flex gap-4">
             <select 
               id="assign-select"
               className="flex-1 bg-white border border-primary-light rounded-lg p-2 text-[14px]"
             >
-              {courseData.map(unit => (
-                <option key={unit.id} value={unit.id}>{unit.title}</option>
-              ))}
+              <optgroup label="Units (Full Course)">
+                {courseData.map(unit => (
+                  <option key={unit.id} value={`unit:${unit.id}`}>📚 Unit: {unit.title}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Individual Lessons">
+                {courseData.flatMap(unit => 
+                  (unit.lessons || []).map((lesson: any) => (
+                    <option key={lesson.id} value={`lesson:${unit.id}:${lesson.id}`}>
+                      📄 {lesson.title} ({unit.title}) [{lesson.status || "Draft"}]
+                    </option>
+                  ))
+                )}
+              </optgroup>
             </select>
             <Button 
               onClick={() => {
                 const selectEl = document.getElementById("assign-select") as HTMLSelectElement;
-                const unitId = selectEl?.value;
-                const unit = courseData.find(u => u.id === unitId);
+                const value = selectEl?.value;
+                if (!value) return;
+
+                const parts = value.split(":");
+                const type = parts[0];
+                const unitId = parts[1];
+                const lessonId = parts[2];
                 
                 const updateState = () => {
-                  if (unit) {
-                    addToCursus(selectedTrackingStudent, {
-                      type: "unit",
-                      title: unit.title,
-                      unitId: unit.id,
-                    });
+                  if (type === "unit") {
+                    const unit = courseData.find(u => u.id === unitId);
+                    if (unit) {
+                      addToCursus(selectedTrackingStudent, {
+                        type: "unit",
+                        title: unit.title,
+                        unitId: unit.id,
+                      });
+                    }
+                  } else if (type === "lesson") {
+                    const unit = courseData.find(u => u.id === unitId);
+                    const lesson = unit?.lessons?.find((l: any) => l.id === lessonId);
+                    if (lesson) {
+                      addToCursus(selectedTrackingStudent, {
+                        type: "lesson",
+                        title: lesson.title,
+                        lessonId: lesson.id,
+                        unitId: unitId,
+                      });
+                    }
                   }
                   setIsAssigningFlow(false);
                 };
@@ -92,21 +125,35 @@ export function TrackingTabAssignedCourses({
           </div>
         ) : (
           (studentCursuses[selectedTrackingStudent] || []).map((cursus: any, index: number) => {
-            const historyData = JSON.parse(localStorage.getItem("lms_student_history") || "[]");
-            const studentHistory = historyData.filter((h: any) => h.studentId === selectedTrackingStudent);
+            const studentHistory = studentHistoryAll.filter((h: any) => h.studentId === selectedTrackingStudent);
             
             let progress = 0;
             if (cursus.type === "unit") {
               const unit = courseData.find((u: any) => u.id === cursus.unitId);
-              if (unit && unit.lessons.length > 0) {
-                const finishedLessons = unit.lessons.filter((l: any) => 
-                  studentHistory.some((h: any) => h.type === 'lesson_finish' && h.lessonId === l.id)
-                ).length;
-                progress = Math.round((finishedLessons / unit.lessons.length) * 100);
+              if (unit) {
+                const publishedLessons = (unit.lessons || []).filter((l: any) => l.status === "Published");
+                if (publishedLessons.length > 0) {
+                  const finishedLessons = publishedLessons.filter((l: any) => 
+                    studentHistory.some((h: any) => h.type === 'lesson_finish' && h.lessonId === l.id)
+                  ).length;
+                  progress = Math.round((finishedLessons / publishedLessons.length) * 100);
+                } else {
+                  // If there are no published lessons yet, progress is 0% (or 100% if empty unit, but let's default to 0)
+                  progress = 0;
+                }
               }
-            } else if (cursus.type === "lesson") {
+            } else if (cursus.type === "lesson" || cursus.type === "test") {
               const isFinished = studentHistory.some((h: any) => h.type === 'lesson_finish' && h.lessonId === cursus.lessonId);
               if (isFinished) progress = 100;
+            }
+
+            let name = cursus.title;
+            if (!name) {
+              if (cursus.type === "unit") {
+                name = courseData.find((u: any) => u.id === cursus.unitId)?.title || "Unknown Unit";
+              } else if (cursus.type === "lesson" || cursus.type === "test") {
+                name = lessonsList.find((l: any) => l.id === cursus.lessonId)?.title || `Unknown ${cursus.type}`;
+              }
             }
 
             return (
@@ -116,8 +163,8 @@ export function TrackingTabAssignedCourses({
               >
                 <div className="flex flex-col flex-1">
                   <span className="text-[15px] font-bold text-primary-dark">
-                    {cursus.type === "unit" ? "📚 Unit: " : "📄 Lesson: "}
-                    {cursus.title}
+                    {cursus.type === "unit" ? "📚 Unit: " : cursus.type === "test" ? "📝 Test: " : "📄 Lesson: "}
+                    {name}
                   </span>
                   <div className="flex items-center gap-3 mt-2">
                     <div className="h-1.5 flex-1 bg-neutral-bg rounded-full overflow-hidden">
