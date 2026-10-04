@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { TeacherDashboard } from "./TeacherDashboard";
 import { Button } from "../components/Button";
 
@@ -57,9 +58,9 @@ export function TeacherSpace() {
             Sign In
           </Button>
           <div className="mt-6">
-            <a href="/" className="text-primary hover:underline text-[14px]">
+            <Link to="/" className="text-primary hover:underline text-[14px]">
               Student Portal
-            </a>
+            </Link>
           </div>
         </form>
       </div>

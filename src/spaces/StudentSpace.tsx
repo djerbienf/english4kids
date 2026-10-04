@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { Lesson, StudentStats, SRSDeckItem } from "../types";
 import { Button } from "../components/Button";
 import { StudentDashboard } from "./StudentDashboard";
@@ -282,12 +283,12 @@ export function StudentSpace() {
             Start Studying →
           </Button>
           <div className="mt-6">
-            <a
-              href="/teacher"
+            <Link
+              to="/teacher"
               className="text-primary hover:underline text-[14px]"
             >
               Go to Teacher Portal
-            </a>
+            </Link>
           </div>
         </form>
       </div>
